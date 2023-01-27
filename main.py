@@ -13,9 +13,9 @@ if __name__ == '__main__':
     di.add_runs_to_database(database=db)
     # db.export_runs_to_csv()
 
-    ana = Analysis(database=db, weighting_factor=1)
+    ana = Analysis(database=db, weighting_factor=0.90)
     ana.plot_rolling_load_for_runs()
     # ana.plot_scatter_loads()
-    ana.plot_rolling_distance()
+    # ana.plot_rolling_distance()
     ana.show_runs()
     print(ana.all_runs.tail(7))

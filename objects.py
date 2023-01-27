@@ -355,9 +355,9 @@ class Analysis:
         n1 = 42
 
         self.grouped_runs[f'CTL Garmin'] = self.grouped_runs["Garmin_load"].rolling(
-            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum() / 6, raw=False)
+            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
         self.grouped_runs[f'CTL Runalyze'] = self.grouped_runs["Runalyze_trimp"].rolling(
-            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum() / 6, raw=False)
+            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
 
     def _add_tsb(self) -> None:
         """
