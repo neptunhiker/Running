@@ -8,6 +8,7 @@ from pprint import pprint
 import sqlite3
 from typing import List, Optional
 
+import helpers
 
 @dataclass
 class Run:
@@ -124,7 +125,6 @@ class Database:
                    calories=sqlite3_row["Calories"],
                    avg_cadence=sqlite3_row["Avg_cadence"]
                    )
-
 
 
 class DataImport:
@@ -293,6 +293,9 @@ class Analysis:
         # group by date
         self.grouped_runs = self.all_runs.groupby('Date').sum().reset_index()
 
+        # keep only relevant columns
+        self.grouped_runs = self.grouped_runs[["Date", "Distance", "Calories", "Garmin_load", "Runalyze_trimp"]]
+
         # Reindex the DataFrame to align its index with the date range
         self.grouped_runs = self.grouped_runs.set_index('Date').reindex(date_range, fill_value=0).reset_index()
         self.grouped_runs = self.grouped_runs.rename(columns={'index': 'Date'})
@@ -326,14 +329,14 @@ class Analysis:
         n0 = 7
         n1 = 42
 
-        self.grouped_runs[f'rolling_garmin_load({n0})'] = self.grouped_runs['Garmin_load'].rolling(window=n0).sum()
-        self.grouped_runs[f'rolling_garmin_load({n1})'] = self.grouped_runs['Garmin_load'].rolling(window=n1).sum() / 6
-        self.grouped_runs[f'rolling_runalyze_trimp({n0})'] = self.grouped_runs['Runalyze_trimp'].rolling(
+        self.grouped_runs[f'rolling_garmin_load ({n0})'] = self.grouped_runs['Garmin_load'].rolling(window=n0).sum()
+        self.grouped_runs[f'rolling_garmin_load ({n1})'] = self.grouped_runs['Garmin_load'].rolling(window=n1).sum() / 6
+        self.grouped_runs[f'rolling_runalyze_trimp ({n0})'] = self.grouped_runs['Runalyze_trimp'].rolling(
             window=n0).sum()
-        self.grouped_runs[f'rolling_runalyze_trimp({n1})'] = self.grouped_runs['Runalyze_trimp'].rolling(
+        self.grouped_runs[f'rolling_runalyze_trimp ({n1})'] = self.grouped_runs['Runalyze_trimp'].rolling(
             window=n1).sum() / 6
 
-    def _add_atl(self, b: float = 0.9) -> None:
+    def _add_atl(self, b: float) -> None:
         """
         Add the ATL (Acute Training Load) as an exponentially weighted metric to the data
         :param b: the weighting factor
@@ -341,23 +344,45 @@ class Analysis:
         """
         n0 = 7
 
-        self.grouped_runs[f'ATL Garmin'] = self.grouped_runs["Garmin_load"].rolling(
-            window=n0).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
-        self.grouped_runs[f'ATL Runalyze'] = self.grouped_runs["Runalyze_trimp"].rolling(
-            window=n0).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
+        self.grouped_runs['ATL Garmin'] = 0
+        self.grouped_runs['ATL Runalyze'] = 0
+        self.grouped_runs.reset_index(inplace=True, drop=True)
+        for i in range(n0, len(self.grouped_runs)):
+            garmin_loads = self.grouped_runs.iloc[i - n0 + 1:i + 1]['Garmin_load'].tolist()
+            garmin_loads.reverse()
+            runalyze_trimps = self.grouped_runs.iloc[i - n0 + 1:i + 1]['Runalyze_trimp'].tolist()
+            runalyze_trimps.reverse()
+            self.grouped_runs.at[i, 'ATL Garmin'] = helpers.weighted_sum(garmin_loads, b, n0)
+            self.grouped_runs.at[i, 'ATL Runalyze'] = helpers.weighted_sum(runalyze_trimps, b, n0)
 
-    def _add_ctl(self, b: float = 0.9) -> None:
+        # self.grouped_runs['ATL Garmin'] = self.grouped_runs["Garmin_load"].rolling(
+        #     window=n0).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
+        # self.grouped_runs['ATL Runalyze'] = self.grouped_runs["Runalyze_trimp"].rolling(
+        #     window=n0).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
+
+    def _add_ctl(self, b: float) -> None:
         """
         Add the CTL (Chronic Training Load) as an exponentially weighted metric to the data
         :param b: the weighting factor
         :return: None
         """
-        n1 = 42
+        n0 = 42
 
-        self.grouped_runs[f'CTL Garmin'] = self.grouped_runs["Garmin_load"].rolling(
-            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
-        self.grouped_runs[f'CTL Runalyze'] = self.grouped_runs["Runalyze_trimp"].rolling(
-            window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum(), raw=False)
+        self.grouped_runs['CTL Garmin'] = 0
+        self.grouped_runs['CTL Runalyze'] = 0
+        self.grouped_runs.reset_index(inplace=True, drop=True)
+        for i in range(n0, len(self.grouped_runs)):
+            garmin_loads = self.grouped_runs.iloc[i - n0 + 1:i + 1]['Garmin_load'].tolist()
+            garmin_loads.reverse()
+            runalyze_trimps = self.grouped_runs.iloc[i - n0 + 1:i + 1]['Runalyze_trimp'].tolist()
+            runalyze_trimps.reverse()
+            self.grouped_runs.at[i, 'CTL Garmin'] = helpers.weighted_sum(garmin_loads, b, n0) / 6
+            self.grouped_runs.at[i, 'CTL Runalyze'] = helpers.weighted_sum(runalyze_trimps, b, n0) / 6
+
+        # self.grouped_runs[f'CTL Garmin'] = self.grouped_runs["Garmin_load"].rolling(
+        #     window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum() / 6, raw=False)
+        # self.grouped_runs[f'CTL Runalyze'] = self.grouped_runs["Runalyze_trimp"].rolling(
+        #     window=n1).apply(lambda x: (x * np.power(b, np.arange(len(x)))).sum() / 6, raw=False)
 
     def _add_tsb(self) -> None:
         """
@@ -382,18 +407,18 @@ class Analysis:
         """
 
         fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(nrows=2, ncols=2, figsize=(16, 6))
-        ax0.fill_between(self.grouped_runs["Date"], self.grouped_runs[f'CTL Garmin'], color='darkred',
-                         label=f'CTL Garmin')
-        ax0.plot(self.grouped_runs["Date"], self.grouped_runs[f'ATL Garmin'],
-                 label=f'ATL Garmin', color='black')
+        ax0.fill_between(self.grouped_runs["Date"], self.grouped_runs['CTL Garmin'], color='darkred',
+                         label='CTL Garmin')
+        ax0.plot(self.grouped_runs["Date"], self.grouped_runs['ATL Garmin'],
+                 label='ATL Garmin', color='black')
         ax0.set_ylabel('Garmin load')
         ax0.set_ylim(0, 1200)
         ax0.legend()
 
-        ax1.fill_between(self.grouped_runs["Date"], self.grouped_runs[f'CTL Runalyze'], color='darkred',
-                         label=f'CTL Runalyze')
-        ax1.plot(self.grouped_runs["Date"], self.grouped_runs[f'ATL Runalyze'],
-                 label=f'ATL Runalyze', color='black')
+        ax1.fill_between(self.grouped_runs["Date"], self.grouped_runs['CTL Runalyze'], color='darkred',
+                         label='CTL Runalyze')
+        ax1.plot(self.grouped_runs["Date"], self.grouped_runs['ATL Runalyze'],
+                 label='ATL Runalyze', color='black')
         ax1.set_ylabel('Runalyze TRIMP')
         ax1.set_ylim(0, 1200)
         ax1.legend()
@@ -403,6 +428,7 @@ class Analysis:
         ax2.plot(self.grouped_runs["Date"], self.grouped_runs[f'CTL Runalyze'],
                  label=f'CTL Runalyze', color='black')
         ax2.set_ylabel('Load & TRIMP')
+        ax2.set_ylim(0, 1200)
         ax2.legend()
 
         ax3.plot(self.grouped_runs["Date"], self.grouped_runs["TSB Garmin"],
@@ -411,6 +437,7 @@ class Analysis:
                  label=f'TSB Runalyze', color='black')
 
         ax3.set_ylabel('Load & TRIMP')
+        ax3.set_ylim(-800, 800)
         ax3.legend()
 
         fig.tight_layout()
