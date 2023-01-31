@@ -1,6 +1,7 @@
 from contextlib import closing
 from dataclasses import dataclass, field
 import datetime
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -261,6 +262,7 @@ class Analysis:
     all_runs: pd.DataFrame = field(init=False)
     grouped_runs: pd.DataFrame = field(init=False)
     starting_date: datetime.date = datetime.date(2022, 7, 1)
+    forecast: bool = False
 
     def __post_init__(self):
         self._get_all_runs()
@@ -271,7 +273,6 @@ class Analysis:
         self._add_ctl(b=self.weighting_factor)
         self._add_tsb()
         self._filter_for_starting_date()
-
 
     def _get_all_runs(self) -> None:
         """
@@ -288,8 +289,15 @@ class Analysis:
         Create a df for runs for every day in the past by grouping them by date
         :return:
         """
+        # create a timedelta for a forecast
+        if self.forecast:
+            timedelta = 30
+        else:
+            timedelta = 0
+
         # Create a date range that covers the entire period of interest
-        date_range = pd.date_range(start=self.all_runs['Date'].min(), end=datetime.date.today(), freq='D')
+        date_range = pd.date_range(start=self.all_runs['Date'].min(),
+                                   end=datetime.date.today() + datetime.timedelta(days=timedelta), freq='D')
 
         # group by date
         self.grouped_runs = self.all_runs.groupby('Date').sum().reset_index()
@@ -399,83 +407,134 @@ class Analysis:
         """
         pprint(self.grouped_runs)
 
-        
-
-    def plot_rolling_load_for_runs(self) -> None:
+    def _plot_ctl_atl(self, source: str, axis: plt.axis) -> None:
         """
-        Plot the rolling load for running over the last n days
+        Plot Chronic and Acute Training load into a single chart
+        :param source: Either "garmin" or "runalyze"
+        :param axis: the axis on which the plot shall be placed onto
         :return: None
         """
+        if source.lower() == "garmin":
+            label = "Garmin"
+            load_type = "load"
+        elif source.lower() == "runalyze":
+            label = "Runalyze"
+            load_type = "TRIMP"
+        else:
+            raise ValueError("The source must be either Garmin or Runalyze")
 
-        fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(nrows=2, ncols=2, figsize=(16, 6))
-        ax0.fill_between(self.grouped_runs["Date"], self.grouped_runs['CTL Garmin'], color='darkred',
-                         label='CTL Garmin')
-        ax0.plot(self.grouped_runs["Date"], self.grouped_runs['ATL Garmin'],
-                 label='ATL Garmin', color='black')
-        ax0.set_ylabel('Garmin load')
-        ax0.set_ylim(0, 250)
-        ax0.legend()
+        axis.fill_between(self.grouped_runs["Date"], self.grouped_runs[f"CTL {label}"], color='darkred',
+                          label=f"CTL {label}")
+        axis.plot(self.grouped_runs["Date"], self.grouped_runs[f"ATL {label}"],
+                  label=f"ATL {label}", color='black')
+        axis.axvline(x=datetime.date.today(), color="black", linestyle="dotted")
+        axis.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %y'))
+        axis.xaxis.set_tick_params(rotation=30, labelsize=8)
+        axis.set_xlim(self.grouped_runs['Date'].min(), self.grouped_runs['Date'].max())
+        axis.set_ylabel(f"{label} {load_type}")
+        axis.set_ylim(0, 250)
+        axis.legend()
 
-        ax1.fill_between(self.grouped_runs["Date"], self.grouped_runs['CTL Runalyze'], color='darkred',
-                         label='CTL Runalyze')
-        ax1.plot(self.grouped_runs["Date"], self.grouped_runs['ATL Runalyze'],
-                 label='ATL Runalyze', color='black')
-        ax1.set_ylabel('Runalyze TRIMP')
-        ax1.set_ylim(0, 250)
-        ax1.legend()
+    def _plot_ctl_comparison(self, axis: plt.axis) -> None:
+        """
+        Plot a comparison of Garmin and Runalyze CTL data
+        :param axis: the axis on which the chart is to be plotted
+        :return: None
+        """
+        axis.plot(self.grouped_runs["Date"], self.grouped_runs[f'CTL Garmin'],
+                  label=f'CTL Garmin', color='darkred')
+        axis.plot(self.grouped_runs["Date"], self.grouped_runs[f'CTL Runalyze'],
+                  label=f'CTL Runalyze', color='black')
+        axis.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %y'))
+        axis.xaxis.set_tick_params(rotation=30, labelsize=8)
+        axis.axvline(x=datetime.date.today(), color="black", linestyle="dotted")
+        axis.set_xlim(self.grouped_runs['Date'].min(), self.grouped_runs['Date'].max())
+        axis.set_ylabel('Load & TRIMP')
+        axis.set_ylim(0, 250)
+        axis.legend()
 
-        ax2.plot(self.grouped_runs["Date"], self.grouped_runs[f'CTL Garmin'],
-                 label=f'CTL Garmin', color='darkred')
-        ax2.plot(self.grouped_runs["Date"], self.grouped_runs[f'CTL Runalyze'],
-                 label=f'CTL Runalyze', color='black')
-        ax2.set_ylabel('Load & TRIMP')
-        ax2.set_ylim(0, 250)
-        ax2.legend()
+    def _plot_tsb(self, axis: plt.axis) -> None:
+        """
+        Plot TSB data for Garmin and Runalyze
+        :param axis: the axis on which the chart is to be plotted on
+        :return: None
+        """
+        axis.plot(self.grouped_runs["Date"], self.grouped_runs["TSB Garmin"],
+                  label=f'TSB Garmin', color='darkred')
+        axis.plot(self.grouped_runs["Date"], self.grouped_runs["TSB Runalyze"],
+                  label=f'TSB Runalyze', color='black')
+        axis.axhline(y=0, color="black", linestyle="dotted")
+        axis.axvline(x=datetime.date.today(), color="black", linestyle="dotted")
 
-        ax3.plot(self.grouped_runs["Date"], self.grouped_runs["TSB Garmin"],
-                 label=f'TSB Garmin', color='darkred')
-        ax3.plot(self.grouped_runs["Date"], self.grouped_runs["TSB Runalyze"],
-                 label=f'TSB Runalyze', color='black')
-        ax3.axhline(y=0, color="black", linestyle="dotted")
+        axis.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %y'))
+        axis.xaxis.set_tick_params(rotation=30, labelsize=8)
+        axis.set_xlim(self.grouped_runs['Date'].min(), self.grouped_runs['Date'].max())
 
-        ax3.set_ylabel('Load & TRIMP')
-        ax3.set_ylim(-120, 120)
-        ax3.legend()
+        axis.set_ylabel('Load & TRIMP')
+        axis.set_ylim(-120, 120)
+        axis.legend(loc="upper left")
 
-        fig.tight_layout()
-        plt.show()
+        today = datetime.date.today()
+        today_index = (self.grouped_runs["Date"] == today).idxmax()
+        tsb_garmin_today = self.grouped_runs.loc[today_index, "TSB Garmin"]
+        tsb_runalyze_today = self.grouped_runs.loc[today_index, "TSB Runalyze"]
+        axis.annotate(f"TSB Garmin today: {tsb_garmin_today:.1f}",
+                      xy=(1, 1), xycoords='axes fraction',
+                      xytext=(-5, -5), textcoords='offset points',
+                      ha='right', va='top', fontsize=8, bbox=dict(boxstyle='round,pad=0.5',
+                                                                  edgecolor="None", fc='white', alpha=1.0))
+        axis.annotate(f"TSB Runalyze today: {tsb_runalyze_today:.1f}",
+                      xy=(1, 0.90), xycoords='axes fraction',
+                      xytext=(-5, -5), textcoords='offset points',
+                      ha='right', va='top', fontsize=8, bbox=dict(boxstyle='round,pad=0.5',
+                                                                  edgecolor="None", fc='white', alpha=1.0))
 
-    def plot_rolling_distance(self) -> None:
+    def _plot_rolling_distance(self, axis: plt.axis) -> None:
         """
         Plot the rolling distance in kms over n days
-        :param n: number of days
+        :param axis: the axis on which the chart is to be plotted on
         :return: None
         """
         self._sort_by_date()
-        fig, ax = plt.subplots(figsize=(12, 6))
 
-        for n in [42, 60]:
+        for n, color in zip([42, 60], ["black", "darkred"]):
             label_n = f"Rolling distance over {n} days"
             rolling_distance = self.grouped_runs["Distance"].rolling(window=n).mean()
-            ax.plot(self.grouped_runs.Date, rolling_distance, label=label_n)
+            axis.plot(self.grouped_runs.Date, rolling_distance, label=label_n, color=color)
 
-        plt.legend()
-        fig.tight_layout()
-        plt.show()
+        axis.axvline(x=datetime.date.today(), color="black", linestyle="dotted")
+        axis.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %y'))
+        axis.xaxis.set_tick_params(rotation=30, labelsize=8)
+        axis.set_xlim(self.grouped_runs['Date'].min(), self.grouped_runs['Date'].max())
+        axis.set_ylabel('km')
+        axis.legend()
 
-    def plot_scatter_loads(self) -> None:
+    def _plot_scatter_loads(self, axis: plt.axis) -> None:
         """
         Create a scatter plot of different load data from Garmin and Runalyze
+        :param axis: the axis on which the chart is to be plotted on
         :return: None
         """
         # Create the scatter plot
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.scatter(self.grouped_runs.Garmin_load, self.grouped_runs.Runalyze_trimp, color="darkred", s=16)
+        axis.scatter(self.grouped_runs.Garmin_load, self.grouped_runs.Runalyze_trimp, color="darkred", s=16)
 
         # Add axis labels
         plt.xlabel('Garmin Load')
         plt.ylabel('Runalyze TRIMP')
 
-        # Show the
+    def plot_running_analytics(self) -> None:
+        """
+        Plot various running anlytics
+        :return: None
+        """
+
+        fig, ((ax0, ax1), (ax2, ax3), (ax4, ax5)) = plt.subplots(nrows=3, ncols=2, figsize=(16, 8))
+        self._plot_ctl_atl(source="Garmin", axis=ax0)
+        self._plot_ctl_atl(source="Runalyze", axis=ax1)
+        self._plot_ctl_comparison(axis=ax2)
+        self._plot_tsb(axis=ax3)
+        self._plot_rolling_distance(axis=ax4)
+        self._plot_scatter_loads(axis=ax5)
+
         fig.tight_layout()
         plt.show()
