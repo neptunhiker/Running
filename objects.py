@@ -497,7 +497,14 @@ class Analysis:
         """
         self._sort_by_date()
 
-        for n, color in zip([42, 60], ["black", "darkred"]):
+        # find the window with the largest rolling mean starting for window sizes larger than three weeks
+        maxes = {}
+        for n in range(21, 90):
+            rolling_distance = self.grouped_runs["Distance"].rolling(window=n).mean()
+            maxes[n] = rolling_distance.max()
+        largest_rolling_distance = max(maxes.items(), key=lambda x: x[1])[0]
+
+        for n, color in zip([largest_rolling_distance, 42, 60], ["green", "black", "darkred"]):
             label_n = f"Rolling distance over {n} days"
             rolling_distance = self.grouped_runs["Distance"].rolling(window=n).mean()
             axis.plot(self.grouped_runs.Date, rolling_distance, label=label_n, color=color)
