@@ -1,30 +1,31 @@
 import datetime
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
-import pandas as pd
+def ewm():
 
+    load = [100 for i in range(80)]
+    load[0] = 0
+    load = [0 for i in range(80)]
+    load[0] = 100
 
+    df = pd.DataFrame(data=load)
+    atl = df.ewm(alpha=2 / (1 + 7), adjust=False).mean()
+    ctl = df.ewm(alpha=2 / (1 + 42), adjust=False).mean()
+    tsb = ctl - atl
 
-
+    fig, ax = plt.subplots()
+    ax.plot(atl, color="red", label="ATL")
+    ax.plot(ctl, color="blue", label="CTL")
+    ax.plot(tsb, color="green", label="TSB")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
-    data = {'Garmin_load': [443, 108, 0, 235, 0, 132, 231, 100, 0, 100]}
-    df = pd.DataFrame(data)
-
-    import pandas as pd
-
-    def calculate_rolling_ATL(df):
-        df['rolling_ATL'] = df['Garmin_load'].rolling(window=7).apply(lambda x: x.ewm(alpha=0.9).mean())
-        return df
-
-    data = {'Garmin_load': [443, 108, 0, 235, 0, 132, 231]}
-    df = pd.DataFrame(data)
-
-    df = calculate_rolling_ATL(df)
-
-    print(df)
+    ewm()
 
 
 

@@ -1,3 +1,4 @@
+import datetime
 import pandas as pd
 
 from objects import Analysis, DataImport, Database
@@ -13,9 +14,9 @@ if __name__ == '__main__':
     di.add_runs_to_database(database=db)
     # db.export_runs_to_csv()
 
-    ana = Analysis(database=db, weighting_factor=1)
+    ana = Analysis(database=db, weighting_factor=1, starting_date=datetime.date(2022, 10, 1))
     ana.show_runs()
 
     ana.plot_rolling_load_for_runs()
-    # ana.plot_scatter_loads()
-    # ana.plot_rolling_distance()
+    ana.plot_scatter_loads()
+    ana.plot_rolling_distance()
