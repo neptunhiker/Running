@@ -9,14 +9,12 @@ if __name__ == '__main__':
 
     db = Database(database_path="database//running.db")
     di = DataImport()
-    # pprint(di.data)
-    # di.plot_rolling_distance()
     di.add_runs_to_database(database=db)
     # db.export_runs_to_csv()
 
-    ana = Analysis(database=db, weighting_factor=1, starting_date=datetime.date(2022, 10, 1), forecast=True)
+    ana = Analysis(database=db, weighting_factor=1, starting_date=datetime.date(2022, 12, 1), forecast=True)
     ana.show_runs()
 
     ana.plot_running_analytics()
-    # ana.plot_scatter_loads()
-    # ana.plot_rolling_distance()
+
+    # todo: rolling distance should be calculated directly on the dataframe not in the plotting function

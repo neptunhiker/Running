@@ -433,7 +433,28 @@ class Analysis:
         axis.set_xlim(self.grouped_runs['Date'].min(), self.grouped_runs['Date'].max())
         axis.set_ylabel(f"{label} {load_type}")
         axis.set_ylim(0, 250)
-        axis.legend()
+        axis.legend(loc="upper left")
+
+        today = datetime.date.today()
+        today_index = (self.grouped_runs["Date"] == today).idxmax()
+        atl_today = self.grouped_runs.loc[today_index, f"ATL {label}"]
+        atl_all_time_high = self.grouped_runs[f"ATL {label}"].max()
+        atl_ratio = atl_today / atl_all_time_high * 100
+        ctl_today = self.grouped_runs.loc[today_index, f"CTL {label}"]
+        ctl_all_time_high = self.grouped_runs[f"CTL {label}"].max()
+        ctl_ratio = ctl_today / ctl_all_time_high * 100
+
+        axis.annotate(f"ATL today / ATL all-time high: {atl_ratio:.0f} %",
+                      xy=(1, 1), xycoords='axes fraction',
+                      xytext=(-5, -5), textcoords='offset points',
+                      ha='right', va='top', fontsize=8, bbox=dict(boxstyle='round,pad=0.5',
+                                                                  edgecolor="None", fc='white', alpha=1.0))
+
+        axis.annotate(f"CTL today / CTL all-time high: {ctl_ratio:.0f} %",
+                      xy=(1, 0.90), xycoords='axes fraction',
+                      xytext=(-5, -5), textcoords='offset points',
+                      ha='right', va='top', fontsize=8, bbox=dict(boxstyle='round,pad=0.5',
+                                                                  edgecolor="None", fc='white', alpha=1.0))
 
     def _plot_ctl_comparison(self, axis: plt.axis) -> None:
         """
@@ -504,7 +525,7 @@ class Analysis:
             maxes[n] = rolling_distance.max()
         largest_rolling_distance = max(maxes.items(), key=lambda x: x[1])[0]
 
-        for n, color in zip([largest_rolling_distance, 42, 60], ["green", "black", "darkred"]):
+        for n, color in zip([largest_rolling_distance, 42, 90], ["green", "black", "darkred"]):
             label_n = f"Rolling distance over {n} days"
             rolling_distance = self.grouped_runs["Distance"].rolling(window=n).mean()
             axis.plot(self.grouped_runs.Date, rolling_distance, label=label_n, color=color)
